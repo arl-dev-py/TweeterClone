@@ -11,3 +11,4 @@ httpx
 black
 ruff
 mypy
+psycopg2-binary
