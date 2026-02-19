@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from app.models import Media, Tweet
 from db.engine import get_async_session
+from fastapi import UploadFile, File, Form
 
 router = APIRouter(prefix="/api/v1/medias", tags=["medias"])
 
@@ -24,12 +25,20 @@ async def get_medias(session: AsyncSession = Depends(get_async_session)):
     result = await session.execute(select(Media))
     return result.scalars().all()
 
+
 @router.post("/", response_model=MediaOut, status_code=status.HTTP_201_CREATED)
-async def create_media(media_in: MediaCreate, session: AsyncSession = Depends(get_async_session)):
-    tweet = await session.get(Tweet, media_in.tweet_id)
+async def create_media(
+        file: UploadFile = File(...),
+        tweet_id: int = Form(...),
+        session: AsyncSession = Depends(get_async_session)
+):
+    tweet = await session.get(Tweet, tweet_id)
     if not tweet:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Tweet not found")
-    media = Media(url=media_in.url, tweet_id=media_in.tweet_id)
+
+    contents = await file.read()
+
+    media = Media(url=f"/media/{file.filename}", tweet_id=tweet_id)
     session.add(media)
     await session.commit()
     await session.refresh(media)
