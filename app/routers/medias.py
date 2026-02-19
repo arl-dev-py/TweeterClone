@@ -17,7 +17,7 @@ class MediaOut(BaseModel):
     model_config = {"from_attributes": True}
     id: int
     url: str
-    tweet_id: int
+    tweet_id: int | None = None
     created_at: datetime
 
 @router.get("/", response_model=list[MediaOut])
@@ -28,18 +28,14 @@ async def get_medias(session: AsyncSession = Depends(get_async_session)):
 
 @router.post("/", response_model=MediaOut, status_code=status.HTTP_201_CREATED)
 async def create_media(
-        file: UploadFile = File(...),
-        tweet_id: int = Form(...),
-        session: AsyncSession = Depends(get_async_session)
+    file: UploadFile = File(...),
+    tweet_id: int = Form(0),
+    session: AsyncSession = Depends(get_async_session)
 ):
-    tweet = await session.get(Tweet, tweet_id)
-    if not tweet:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tweet not found")
-
-    contents = await file.read()
-
+    # contents = await file.read()
     media = Media(url=f"/media/{file.filename}", tweet_id=tweet_id)
     session.add(media)
     await session.commit()
     await session.refresh(media)
     return media
+

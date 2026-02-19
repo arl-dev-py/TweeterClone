@@ -1,22 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from datetime import datetime
-from app.models import Tweet, User
+from typing import Optional, List
+from app.models import Tweet, User, Media
 from db.engine import get_async_session
+from app.routers.medias import MediaOut
+from sqlalchemy.orm import selectinload
 
 router = APIRouter(prefix="/api/v1/tweets", tags=["tweets"])
 
 class TweetCreate(BaseModel):
     text: str
     user_id: int
+    media_ids: Optional[List[int]] = []
 
 class TweetOut(BaseModel):
     model_config = {"from_attributes": True}
     id: int
     text: str
     user_id: int
+    likes_count: int = 0
+    created_at: datetime
+
+class TweetDetailOut(BaseModel):
+    model_config = {"from_attributes": True}
+    id: int
+    text: str
+    user_id: int
+    likes_count: int = 0
+    medias: List[MediaOut] = []
     created_at: datetime
 
 @router.get("/", response_model=list[TweetOut])
@@ -29,8 +43,42 @@ async def create_tweet(tweet_in: TweetCreate, session: AsyncSession = Depends(ge
     user = await session.get(User, tweet_in.user_id)
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
     tweet = Tweet(text=tweet_in.text, user_id=tweet_in.user_id)
     session.add(tweet)
     await session.commit()
     await session.refresh(tweet)
+
+    if tweet_in.media_ids:
+        for media_id in tweet_in.media_ids:
+            media = await session.get(Media, media_id)
+            if media:
+                media.tweet_id = tweet.id
+        await session.commit()
+
+    return tweet
+
+@router.post("/{tweet_id}/likes", status_code=status.HTTP_200_OK)
+async def like_tweet(
+    tweet_id: int,
+    session: AsyncSession = Depends(get_async_session)
+):
+    tweet = await session.get(Tweet, tweet_id)
+    if not tweet:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tweet not found")
+    tweet.likes_count += 1
+    await session.commit()
+    return {"likes_count": tweet.likes_count}
+
+@router.get("/{tweet_id}", response_model=TweetDetailOut)
+async def get_tweet_detail(
+    tweet_id: int,
+    session: AsyncSession = Depends(get_async_session)
+):
+    from app.models import Tweet
+    stmt = select(Tweet).options(selectinload(Tweet.medias)).where(Tweet.id == tweet_id)
+    result = await session.execute(stmt)
+    tweet = result.scalar_one_or_none()
+    if not tweet:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tweet not found")
     return tweet
