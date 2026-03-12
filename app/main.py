@@ -17,14 +17,14 @@ app.add_middleware(
 )
 DIR = os.path.join(os.path.dirname(__file__), 'static')
 app.mount("/static", StaticFiles(directory=DIR), name='static')
-# /css/... → static/css/...
+
 app.mount(
     "/css",
     StaticFiles(directory=os.path.join(DIR, "css")),
     name="css",
 )
 
-# /js/... → static/js/...
+
 app.mount(
     "/js",
     StaticFiles(directory=os.path.join(DIR, "js")),
